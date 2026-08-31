@@ -11,59 +11,73 @@ account's pre-existing "InRange" folders.
 
 | Scenario | id | Trigger | Status |
 |---|---|---|---|
-| Silent Legacy - News Ingest (RSS) | `6108101` | Watch Actor Runs → `santamaria-automations/rss-feed-reader` | Active, untested end-to-end (see gap below) |
-| Silent Legacy - SEC EDGAR Ingest | `6108115` | Watch Actor Runs → `constant_quadruped/sec-edgar-filings-scraper` | Active, untested end-to-end (see gap below) |
-| Silent Legacy - Business Registry Ingest | `6108117` | Watch Actor Runs → `scrapebench/socrata-multi-state-corporate-business-entity-registry` | Active, untested end-to-end (see gap below) |
+| Silent Legacy - News Ingest (RSS) | `6108101` | Watch Actor Runs → `santamaria-automations/rss-feed-reader` | **Confirmed working end-to-end** |
+| Silent Legacy - SEC EDGAR Ingest | `6108115` | Watch Actor Runs → `constant_quadruped/sec-edgar-filings-scraper` | **Confirmed working end-to-end** |
+| Silent Legacy - Business Registry Ingest | `6108117` | Watch Actor Runs → `scrapebench/socrata-multi-state-corporate-business-entity-registry` | **Confirmed working end-to-end** |
 
 Each scenario: Apify trigger → `apify:fetchDatasetItems` → Scout (Claude)
 → Verifier (Claude, filtered) → Writer (Claude, filtered) → insert into
 `silent_legacy_stories`. Reuses existing connections: Anthropic Claude
-(id `8033899`), Retool Postgres (id `8042168`), Apify (id `7147127`,
-"Pull Realtor Agent Data").
+(id `8033899`), Retool Postgres (id `8042168`).
 
-Apify watch hooks (Make hook ids, each tied to one actor under connection
-`7147127`): `2755905` (RSS), `2755908` (SEC EDGAR), `2755909` (business
+**Apify connection: `7039434`** ("My Apify API"), authenticated as the
+`chrisroman193@gmail.com` account — the account that owns the actors and
+that this chat's Apify connector runs against. Watch hooks (Make hook
+ids): `2756397` (RSS), `2756398` (SEC EDGAR), `2756401` (business
 registry).
+
+Verified 2026-08-31: triggered a real run of each of the 3 Store actors
+via the Apify connector; all three scenarios fired automatically
+(`EXECUTION_END`, `authorId: null` — i.e. webhook-triggered, not manual)
+and completed with `status: SUCCESS`. No rows landed in
+`silent_legacy_stories` from these particular test runs, but that's
+expected — the test inputs were generic (a few random PR Newswire items,
+a Tesla 8-K, one bare CO business-registry entry) and were correctly
+rejected by Scout/Verifier as not matching any of the three pillars. The
+plumbing itself — trigger → dataset fetch → Scout → Verifier → Writer →
+insert — is confirmed live.
+
+### Previously used, now retired
+
+Connection `7147127` ("Pull Realtor Agent Data") and its 3 watch hooks
+(`2755905`, `2755908`, `2755909`) were the original wiring, built before
+discovering that connection belonged to a different Apify account than
+the one the actors/schedules would actually run under. Hooks were
+deleted and the scenarios re-pointed to `7039434` instead — see git
+history on this file for the full account-mismatch debugging story if
+it's ever useful again.
+
+## Apify
+
+Actors run under the `chrisroman193@gmail.com` account (same one behind
+connection `7039434`). This is also where the recurring **schedules**
+need to be set up (Apify Console → each actor → Actions → Create Task →
+paste input → Schedule tab → every 3h) — nothing else is blocking that;
+once schedules exist, the pipeline runs unattended.
+
+A custom actor (`slm27/Silent-Legacy-Media`, id `dkIen5rdPTCa9mF60`) also
+exists in this account, intended to replace the Store RSS actor with the
+repo's own `apify/scout-news` source (dedup via key-value store, no
+Store-actor limitations). As of this writing it still runs Apify's
+default placeholder code (0 items returned even with a 30-day lookback)
+— the real `main.js`/`package.json` from `apify/scout-news` still needs
+to be pasted into its Source tab and rebuilt. Not blocking: the pipeline
+runs fine on the Store actor in the meantime.
 
 ## Retool Postgres
 
 Table `silent_legacy_stories` created (see `retool/EDITOR_PORTAL_SPEC.md`
-for schema) in the same database InRange already uses — verified via a
-direct query, 0 rows as of this writing.
-
-## Open gap: Apify account mismatch
-
-The three scenarios are wired correctly and validate, but a live test
-(running each Store actor through the Apify connector available in this
-chat) did **not** trigger any of them. Root cause: Make's "Watch Actor
-Runs" trigger only fires for runs launched under the **same Apify
-account** as the Make connection backing it (`7147127`). The actor runs
-used to test came through a different Apify credential (the OAuth
-connector authorized in this chat), which appears to be a different
-account/token than `7147127` — three of the four Apify connections
-already stored in Make (`7143166`, `7039434`, `7000361`) also turned out
-to have dead/invalid tokens when tested, so `7147127` was the only usable
-one.
-
-**To close this gap, one of:**
-
-1. Set up the actual recurring schedules (Apify Console → each actor →
-   Schedules, every 3h) under whichever Apify account owns connection
-   `7147127` in Make — then real scheduled runs will fire the triggers
-   correctly, no further change needed.
-2. Get a fresh, valid Make connection for the same Apify account as the
-   OAuth connector used in this chat (re-authorize one of the three dead
-   connections, or create a new one), and re-point the three hooks
-   (`2755905`, `2755908`, `2755909`) at it.
-
-Either way, once schedules exist and point at the right account, the
-pipeline should run unattended.
+for schema) in the same database InRange already uses.
 
 ## Not yet done
 
 - WordPress.com connector not enabled in this chat — publishing step
   untested against a live site.
+- Custom `scout-news` actor still needs real source code pasted in (see
+  above) if you want to move off the Store RSS actor.
 - No subject-history aggregation for the Verifier's 2-source check (each
   story is verified against only its own single source record for now —
   see `make/scenarios/README.md`).
 - Retool Chief Editor Portal UI itself not built (spec only).
+- No actor schedules yet — ingestion only runs when an actor is triggered
+  manually until schedules are set up in Apify Console (see above).
