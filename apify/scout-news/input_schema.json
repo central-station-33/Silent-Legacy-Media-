@@ -13,17 +13,11 @@
         "https://www.businesswire.com/portal/site/home/news/rss/"
       ]
     },
-    "makeWebhookUrl": {
-      "title": "Make.com webhook URL",
-      "type": "string",
-      "editor": "textfield",
-      "description": "Destination for new-item payloads. Falls back to the MAKE_WEBHOOK_URL env var."
-    },
     "lookbackHours": {
       "title": "Lookback window (hours)",
       "type": "integer",
       "default": 3,
-      "description": "Only push items published within this many hours of the run."
+      "description": "Only return items published within this many hours of the run."
     }
   },
   "required": ["feedUrls"]

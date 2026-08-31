@@ -1,23 +1,24 @@
 # scout-news
 
 Polls RSS/Atom feeds (local news outlets, court-record feeds, press-release
-wires) every 3 hours and POSTs new items to the Make.com pipeline webhook.
-This is the primary source of the "2-Source Rule" corroboration used by the
+wires) every 3 hours and writes new items to the actor's dataset. This is
+the primary source of the "2-Source Rule" corroboration used by the
 Verifier agent.
+
+Make's "Watch Actor Runs" trigger + "Get Dataset Items" module picks up
+the dataset after each run — see `docs/DEPLOYMENT_STATUS.md` — so this
+actor doesn't push anywhere itself; it just needs to run under the same
+Apify account that Make's Apify connection is authenticated as.
 
 ## Input
 
 See [`input_schema.json`](./input_schema.json). Key fields:
 
 - `feedUrls` — list of RSS/Atom feed URLs to poll.
-- `makeWebhookUrl` — Make.com webhook to POST new items to (or set
-  `MAKE_WEBHOOK_URL` as an actor env var).
-- `lookbackHours` — only push items published within this window (default
+- `lookbackHours` — only return items published within this window (default
   3, matching the schedule interval).
 
-## Output payload
-
-Each POST body:
+## Output (one dataset row per item)
 
 ```json
 {
@@ -33,4 +34,4 @@ Each POST body:
 ## Dedup
 
 Seen links are stored in the actor's key-value store under `SEEN_LINKS`
-across runs so a 3-hour schedule doesn't re-push the same item.
+across runs so a 3-hour schedule doesn't re-return the same item.
