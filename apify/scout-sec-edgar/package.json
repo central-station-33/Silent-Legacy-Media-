@@ -1,0 +1,13 @@
+{
+  "name": "silent-legacy-scout-sec-edgar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "dependencies": {
+    "apify": "^3.2.0"
+  }
+}

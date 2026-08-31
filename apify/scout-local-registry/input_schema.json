@@ -1,0 +1,34 @@
+{
+  "title": "Silent Legacy Local Registry Scout input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "registries": {
+      "title": "Registry sources",
+      "type": "array",
+      "editor": "json",
+      "description": "Each entry is a JSON search endpoint for a Secretary of State business registry or municipal permit portal that supports querying by subject name. Since registry APIs differ by state/city, each source declares its own request shape and the JSON path to the result array.",
+      "prefill": [
+        {
+          "name": "example-state-sos",
+          "watchTerms": ["Example Holdings LLC"],
+          "urlTemplate": "https://example-sos.gov/api/search?name={term}",
+          "resultsPath": "results",
+          "type": "business-registry"
+        }
+      ]
+    },
+    "makeWebhookUrl": {
+      "title": "Make.com webhook URL",
+      "type": "string",
+      "editor": "textfield",
+      "description": "Destination for new-record payloads. Falls back to the MAKE_WEBHOOK_URL env var."
+    },
+    "lookbackHours": {
+      "title": "Lookback window (hours)",
+      "type": "integer",
+      "default": 3
+    }
+  },
+  "required": ["registries"]
+}

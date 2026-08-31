@@ -1,0 +1,9 @@
+{
+  "actorSpecification": 1,
+  "name": "silent-legacy-scout-local-registry",
+  "title": "Silent Legacy - Local Business Registry Scout",
+  "description": "Polls configured Secretary of State business registry and municipal permit portal search endpoints for new filings matching watched subjects, and pushes matches to the Silent Legacy Make.com pipeline.",
+  "version": "0.1",
+  "input": "./input_schema.json",
+  "dockerfile": "./Dockerfile"
+}
