@@ -17,13 +17,30 @@ resource wired into Retool) with columns:
 | `verifier` | jsonb | Verifier agent output (`approved`, `failedRules`, `confidence`, `editorNote`) |
 | `content` | jsonb | Writer agent output (`blogPost`, `xThread`, `videoScript`) |
 | `editor_note` | text, nullable | human editor's reason on reject |
+| `scheduled_publish_at` | timestamptz, nullable | when this story should actually go live — see "Trickle publishing" below |
+| `published_at` | timestamptz, nullable | set once the trickle-publish scenario actually posts it |
 | `created_at` | timestamptz | |
 | `decided_at` | timestamptz, nullable | |
 | `decided_by` | text, nullable | editor's identity |
 
-The Make.com pipeline's final step (`silent-legacy-pipeline.blueprint.json`
-step 12 / `make/scenarios/README.md`) POSTs a new row here with
-`status: "pending"` for every story that clears the Verifier agent.
+Each Make.com ingest scenario (see `docs/DEPLOYMENT_STATUS.md` for the
+current list — one per source) inserts a row here directly via a Postgres
+module with `status: 'pending'` for every story that clears the Verifier
+agent. There is no separate ingest webhook; Make writes to this table
+directly using the same Postgres connection Retool reads from.
+
+### Trickle publishing (weekly batch mode)
+
+With the weekly ingestion cadence (`docs/CONTENT_STRATEGY.md`), a single
+run produces ~20-30 pending stories at once. Rather than publishing all
+of them the moment they're approved, the Approve action should assign
+each a staggered `scheduled_publish_at` (e.g. 3-4 slots per day across
+the coming week), and a separate scheduled Make scenario (not yet built)
+should poll for `status = approved AND scheduled_publish_at <= now() AND
+published_at IS NULL` on some short interval, publish those, and mark
+them done. This keeps the "Approve" click cheap for the editor (batch-
+select and approve up to 30 stories in one sitting) while spreading
+actual publication out.
 
 ## Screen layout
 
@@ -53,19 +70,6 @@ step 12 / `make/scenarios/README.md`) POSTs a new row here with
   - **Reject** button — opens a required reason field, then sets
     `status = rejected`, `editor_note`, `decided_at`, `decided_by`. No
     downstream call.
-
-## Webhook contract (Make → Retool, on ingest)
-
-```json
-POST {{RETOOL_WEBHOOK_URL}}
-{
-  "status": "pending",
-  "pillar": "pro" | "w" | "proof",
-  "scout": { "...": "Scout agent output" },
-  "verifier": { "...": "Verifier agent output" },
-  "content": { "...": "Writer agent output" }
-}
-```
 
 ## Webhook contract (Retool → publish, on Approve)
 

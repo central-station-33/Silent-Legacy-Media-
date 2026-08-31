@@ -26,14 +26,21 @@ Apify (scrapers) → Make.com (orchestration) → Claude API (Scout/Verifier/Wri
 ```
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full data flow,
-[`docs/SETUP.md`](docs/SETUP.md) for how to stand up each piece, and
+[`docs/SETUP.md`](docs/SETUP.md) for how to stand up each piece,
 [`docs/DEPLOYMENT_STATUS.md`](docs/DEPLOYMENT_STATUS.md) for what's
-actually live right now (Make scenarios, Retool table, open gaps).
+actually live right now (Make scenarios, Retool table, open gaps), and
+[`docs/CONTENT_STRATEGY.md`](docs/CONTENT_STRATEGY.md) for the
+weekly-batch cadence and "quiet story" archive sourcing angle.
+
+Five ingestion sources feed the pipeline: news/RSS, SEC filings, business
+registries, IRS Form 990 nonprofit filings, and property deed/lien
+records — the last two specifically for sourcing older, already-settled
+wealth stories rather than only breaking events.
 
 ## Repo layout
 
 ```
-docs/                    Brand blueprint, architecture, setup guide, live deployment status
+docs/                    Brand blueprint, architecture, setup guide, content strategy, live deployment status
 apify/scout-news/        RSS/news scraper actor (reference; Store actor deployed instead)
 apify/scout-sec-edgar/   SEC EDGAR filing scraper actor (reference; Store actor deployed instead)
 apify/scout-local-registry/  Local business registry / permit scraper actor (fallback; no Store equivalent for permits)

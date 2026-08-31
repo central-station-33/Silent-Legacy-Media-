@@ -1,73 +1,88 @@
 # Operational Architecture
 
 ```
-   [ Apify Scrapers ]
-  (News, SEC, IRS 990)
+   [ Apify Store Actors ]
+ (News, SEC, Registry, 990, Deeds)
+           │  "actor run finished" (native Make/Apify integration)
+           ▼
+     [ Make.com ]  ◄── fetches the run's dataset, then per item:
+           │            Scout → Verifier → Writer (Claude)
+           ▼
+    [ Retool DB ]  ◄── silent_legacy_stories: Chief Editor approval queue
            │
            ▼
-     [ Make.com ]  ◄── Scout Agent: aggregates & classifies data
-           │
-           ▼
-     [ Claude API ] ◄── Fact & Writer Agents: verify & draft content
-           │
-           ▼
-    [ Retool DB ]  ◄── Chief Editor Dashboard: 1-click approval
-           │
-           ▼
-    [ WordPress ]  ◄── Pushes live to web, X, IG carousels, Shorts
+    [ WordPress ]  ◄── (not yet connected) publish + fan out to X, IG, Shorts
 ```
+
+This reflects what's actually deployed — see
+[`docs/DEPLOYMENT_STATUS.md`](DEPLOYMENT_STATUS.md) for live IDs, and
+[`docs/CONTENT_STRATEGY.md`](CONTENT_STRATEGY.md) for the weekly-batch
+cadence and archive-story angle layered on top of this.
 
 ## Stages
 
 ### 1. Ingestion (Apify)
 
-Three actors, each on a 3-hour schedule, push raw JSON payloads to a single
-Make.com webhook:
+Five Apify Store actors, one per source:
 
-| Actor | Source | Feeds pillar |
+| Source | Actor | Feeds pillar |
 |---|---|---|
-| `apify/scout-news` | RSS/news feeds (local news, court records, press releases) | all — provides the "2nd source" corroboration |
-| `apify/scout-sec-edgar` | SEC EDGAR full-text search for celebrity-backed LLC filings (Form D, 13D/G) | Pro, W |
-| `apify/scout-local-registry` | Local Secretary of State business registries + municipal permit portals | Proof |
+| News/press | `santamaria-automations/rss-feed-reader` | all — provides the "2nd source" corroboration |
+| SEC filings | `constant_quadruped/sec-edgar-filings-scraper` | Pro, W |
+| Business registry | `scrapebench/socrata-multi-state-corporate-business-entity-registry` (CO/CT/OR) | Proof |
+| IRS Form 990 filings | `devilscrapes/irs-990-officer-comp` | archive/quiet stories — nonprofit/foundation grants & assets |
+| Property deed/lien records | `shelvick/property-deed-records` | archive/quiet stories — commercial real estate & LLC-held property |
 
-Each actor's `README.md` documents its input schema and the shape of the
-payload it POSTs to Make.
+The custom actors in `apify/` (`scout-news`, `scout-sec-edgar`,
+`scout-local-registry`) were the original design and remain as reference/
+fallback for cases the Store actors don't cover well (e.g. municipal
+permits), but aren't the ones deployed — see `docs/DEPLOYMENT_STATUS.md`.
 
 ### 2. Orchestration (Make.com)
 
-One scenario (`make/scenarios/silent-legacy-pipeline.blueprint.json`),
-webhook-triggered, chains three Claude API calls:
+Five near-identical scenarios (one per source), each triggered by Make's
+native **"Watch Actor Runs"** integration — no custom webhook, no API
+token handling. When an actor run finishes:
 
-1. **Scout agent** — classifies the incoming story into `pro` / `w` /
-   `proof` and extracts structured fields (subject, entity, asset, dollar
-   amount if disclosed, sources).
-2. **Verifier agent** — runs the anti-scam 3-Strike Rejection Rules
-   (`proof` pillar) or a lighter corroboration check (`pro`/`w`), and
-   returns `approved: true/false` with a reason.
-3. **Writer agent** — for approved stories only, drafts a 250-word blog
-   post, an X thread, and a short-form video script.
+1. **`apify:fetchDatasetItems`** pulls the run's output; each row becomes
+   its own item for everything downstream.
+2. **Scout agent** (Claude) classifies into `pro` / `w` / `proof`,
+   extracts structured fields, and tags `framing: "current" | "archive"`
+   based on how old the underlying event is.
+3. **Verifier agent** (Claude, only runs if Scout didn't reject) — the
+   anti-scam 3-Strike Rejection Rules (`proof` pillar) or a lighter
+   corroboration check (`pro`/`w`).
+4. **Writer agent** (Claude, only runs if Verifier approved) — drafts a
+   blog post, X thread, and video script, using retrospective "Where Are
+   They Now" framing for archive stories.
+5. **Postgres insert** — writes the story into `silent_legacy_stories`
+   with `status: 'pending'`.
 
-Rejected stories are logged and dropped. Approved output is POSTed to the
-Retool webhook that inserts a pending story card.
+Rejected/unapproved stories simply stop mid-scenario (a filter on the
+next module) — nothing is written for them.
 
 ### 3. Human editorial gate (Retool)
 
-The Chief Editor Portal (spec in `retool/EDITOR_PORTAL_SPEC.md`) shows each
-pending card: original source payload, AI-generated copy, and any pulled
-visual assets, side by side.
+The Chief Editor Portal (spec in `retool/EDITOR_PORTAL_SPEC.md`) shows
+each pending row: original source payload, AI-generated copy, and
+Verifier notes, side by side.
 
-- **Approve** → fires `wordpress/publish.js` (via a Make/Retool webhook) to
-  publish.
+- **Approve** → sets `status = 'approved'` and (in weekly-batch mode) a
+  staggered `scheduled_publish_at`; a not-yet-built trickle-publish
+  scenario picks these up on schedule and calls `wordpress/publish.js`'s
+  logic.
 - **Reject** → archives the draft with the editor's reason.
 
 ### 4. Distribution (WordPress + social)
 
 `wordpress/publish.js` uses the WP REST API to create the post under the
-correct pillar category (`wordpress/categories.json`), then Make.com
-fans the same approved payload out to the X thread poster and drops the
-video script into the faceless-video production queue.
+correct pillar category (`wordpress/categories.json`). Fan-out to X and
+the faceless-video queue is not yet built — WordPress.com isn't connected
+in this environment yet, so this stage is spec-only for now.
 
 ## Environment variables
 
 See [`.env.example`](../.env.example) for every credential each stage
-needs.
+needs (relevant to the `wordpress/` scripts specifically — the live Make
+pipeline reuses connections already stored in the account's Make
+workspace, not these env vars).

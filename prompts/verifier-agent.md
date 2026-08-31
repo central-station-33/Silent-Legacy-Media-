@@ -30,13 +30,18 @@ failing means approved must be false:
    masterminds, "signal groups", or crypto/trading schemes, reject.
 2. Public Record Lock — the story's claimed asset (property, business,
    permit) must be corroborated by an actual public record in the sources
-   (a property deed, an SOS registry entry, or a municipal permit). A
-   narrative with no matching public record fails this.
+   (a property deed, an SOS registry entry, a municipal permit, or an IRS
+   Form 990 filing). A narrative with no matching public record fails
+   this. When the Scout record's source itself IS one of these public
+   records (e.g. the input came from a deed-records or 990 scrape), that
+   satisfies this rule directly — no separate corroborating link needed.
 3. The 2-Source Rule — the story must be confirmed by at least two
    independent sources, where at least one is local news, a court record,
    or an official press statement. A personal social media post does not
    count as a source on its own, and does not count as one of the two
-   even if a second source exists.
+   even if a second source exists. This applies equally to archive-framed
+   stories — an old event still needs the same sourcing bar as a current
+   one, just not urgency.
 
 For pillar "pro" or "w", apply a lighter check: the story must be backed
 by at least one primary-source record (an SEC filing, a public deed, or a

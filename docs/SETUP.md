@@ -3,18 +3,20 @@
 ## Current deployment status
 
 The pipeline is live in the account's Make.com workspace, under the
-**"Silent Legacy Media"** folder. See
+**"Silent Legacy Media"** folder, across all 5 sources. See
 [`docs/DEPLOYMENT_STATUS.md`](DEPLOYMENT_STATUS.md) for exactly what's
-running, the IDs involved, and the one open item blocking real traffic.
+running and the IDs involved, and
+[`docs/CONTENT_STRATEGY.md`](CONTENT_STRATEGY.md) for the weekly-batch
+cadence and archive-story sourcing strategy layered on top of this.
 
 The sections below describe the stack end-to-end for anyone standing it
-up from scratch, or extending it (e.g. adding a 4th source). They reflect
+up from scratch, or extending it (e.g. adding a 6th source). They reflect
 what's actually deployed, not the original custom-Apify-actor design in
 `apify/` (kept in the repo as reference/fallback — see note in step 1).
 
 ## 1. Ingestion — Apify
 
-The deployed pipeline uses three actors from the **Apify Store** rather
+The deployed pipeline uses five actors from the **Apify Store** rather
 than the custom actors in `apify/` (Store actors avoid needing a push/
 deploy workflow, and Make can watch them natively):
 
@@ -23,24 +25,30 @@ deploy workflow, and Make can watch them natively):
 | News/press | [`santamaria-automations/rss-feed-reader`](https://apify.com/santamaria-automations/rss-feed-reader) | `feedUrls`, `maxItemsPerFeed`, `filterByDate` |
 | SEC filings | [`constant_quadruped/sec-edgar-filings-scraper`](https://apify.com/constant_quadruped/sec-edgar-filings-scraper) | free; search by `ticker`/`cik`/`companyName`, NOT Form D — use `SC 13D`/`SC 13G`/`S-1` |
 | Business registry | [`scrapebench/socrata-multi-state-corporate-business-entity-registry`](https://apify.com/scrapebench/socrata-multi-state-corporate-business-entity-registry) | CO/CT/OR only; `sinceDate` for delta pulls |
+| IRS Form 990 filings | [`devilscrapes/irs-990-officer-comp`](https://apify.com/devilscrapes/irs-990-officer-comp) | `searchQuery` (org name) or `eins`; `startYear`/`endYear` for historical range. Reports its own run status as `FAILED` even on success — a known quirk, not a real failure (see `docs/DEPLOYMENT_STATUS.md`) |
+| Property deed/lien records | [`shelvick/property-deed-records`](https://apify.com/shelvick/property-deed-records) | `partyLookups` (LLC/owner name) or `addresses`; `dateFrom`/`dateTo` for historical range |
 
 There is no Store actor covering municipal **permits** — the custom
 `apify/scout-local-registry` actor (generic, configurable per registry
 endpoint) is the fallback if that coverage matters later; it isn't
 deployed. `apify/scout-news` and `apify/scout-sec-edgar` are likewise
 unused now that Store equivalents cover the same ground, but are kept in
-case you outgrow the Store actors' rate limits or field coverage.
+case you outgrow the Store actors' rate limits or field coverage. There's
+also no dedicated actor for business-journal/alumni-magazine archives —
+see the query-bank note in `docs/CONTENT_STRATEGY.md`.
 
-**To get recurring, real ingestion running**, each of the three Store
+**To get recurring, real ingestion running**, each of the five Store
 actors needs a **schedule** (or an Actor Task on a schedule) in Apify
-Console, running under the **same Apify account** as the Make connection
-that owns the "Watch Actor Runs" trigger (Make connection id `7147127`,
-"Pull Realtor Agent Data"). This is the one open item — see
-`docs/DEPLOYMENT_STATUS.md` for why and what to do about it.
+Console, running under the Apify account behind Make connection id
+`7039434` ("My Apify API"). Recommended cadence per
+`docs/CONTENT_STRATEGY.md`: weekly (Sunday 11 PM EST / Monday 5 AM EST)
+rather than continuous polling — widen each actor's own lookback/date
+range accordingly so a week's worth of activity isn't missed between
+runs.
 
 ## 2. Orchestration — Make.com
 
-Three near-identical scenarios (one per source) live in the
+Five near-identical scenarios (one per source) live in the
 "Silent Legacy Media" folder, each:
 
 1. **Trigger**: `apify:finishedActorRuns` ("Watch Actor Runs") — native
@@ -59,7 +67,7 @@ Three near-identical scenarios (one per source) live in the
 6. **`postgres:Query`** — inserts the pending story into
    `silent_legacy_stories` (see step 3).
 
-To extend to a 4th source: duplicate one of these scenarios, point its
+To extend to a 6th source: duplicate one of these scenarios, point its
 trigger at a new "Watch Actor Runs" hook for the new actor, and change the
 literal `"Source type: ..."` string in the Scout call's user message.
 
