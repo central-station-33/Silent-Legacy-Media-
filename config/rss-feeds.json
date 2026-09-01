@@ -1,0 +1,43 @@
+{
+  "_comment": "Starter feed list for the RSS ingestion actor (santamaria-automations/rss-feed-reader). Every URL under `verified` was live-tested on 2026-09-01 and returned real items. Paste the `verified` URLs into the actor's `feedUrls` input. See config/README.md.",
+  "verified": {
+    "athlete_and_entertainer_business": [
+      { "url": "https://boardroom.tv/feed/", "name": "Boardroom", "why": "Kevin Durant/Rich Kleiman outlet — athlete equity deals, ownership stakes, sports business" },
+      { "url": "https://frontofficesports.com/feed/", "name": "Front Office Sports", "why": "Sports business, franchise ownership, athlete ventures" },
+      { "url": "https://www.sportico.com/feed/", "name": "Sportico", "why": "Sports finance, team valuations, athlete investment vehicles" },
+      { "url": "https://andscape.com/feed/", "name": "Andscape", "why": "Black athlete/culture business coverage" }
+    ],
+    "underrepresented_founders_and_wealth": [
+      { "url": "https://www.blackenterprise.com/feed/", "name": "Black Enterprise", "why": "Longest-running Black business publication — acquisitions, franchise owners, funds" },
+      { "url": "https://www.essence.com/feed/", "name": "Essence", "why": "Black women founders and entertainers; business coverage mixed with culture" },
+      { "url": "https://www.hispanicexecutive.com/feed/", "name": "Hispanic Executive", "why": "Latino executives and business owners" }
+    ],
+    "venture_and_funding": [
+      { "url": "https://news.crunchbase.com/feed/", "name": "Crunchbase News", "why": "Funding rounds, angel/seed deals — highest-signal feed for the angel-investing mandate" },
+      { "url": "https://techcrunch.com/feed/", "name": "TechCrunch", "why": "Startup raises, cap-table news, celebrity-backed rounds" },
+      { "url": "https://www.axios.com/feeds/feed.rss", "name": "Axios", "why": "Deals/Pro Rata coverage; broad but catches equity stories" }
+    ],
+    "global": [
+      { "url": "https://restofworld.org/feed/latest", "name": "Rest of World", "why": "Tech and business outside the West — key for the global mandate" },
+      { "url": "https://disruptafrica.com/feed/", "name": "Disrupt Africa", "why": "African startup funding and founder news" }
+    ],
+    "broad_wire_and_business": [
+      { "url": "https://www.prnewswire.com/rss/all-news-releases-list.rss", "name": "PR Newswire", "why": "High volume wire; low signal-to-noise but catches official deal announcements" },
+      { "url": "https://www.businesswire.com/portal/site/home/news/rss/", "name": "Business Wire", "why": "Same role as PR Newswire" },
+      { "url": "https://www.forbes.com/business/feed/", "name": "Forbes Business", "why": "Broad business coverage" },
+      { "url": "https://finance.yahoo.com/news/rssindex", "name": "Yahoo Finance", "why": "Broad market/business coverage" }
+    ]
+  },
+  "failed_do_not_retry_without_fix": [
+    { "url": "https://afrotech.com/feed", "error": "HTTP 404", "note": "Tried with and without trailing slash. AfroTech has no working feed at this path — would need their real feed URL or a scraper." },
+    { "url": "https://blavity.com/feed", "error": "Failed to detect feed type", "note": "Endpoint responds but is not parseable RSS/Atom." },
+    { "url": "https://technical.ly/feed/", "error": "Failed to detect feed type", "note": "Same — responds but not valid feed XML." },
+    { "url": "https://techcabal.com/feed/", "error": "HTTP 403", "note": "Bot-blocked. Still 403 with Apify proxy enabled — would need residential proxy or a browser-based scraper." },
+    { "url": "https://african.business/feed/", "error": "HTTP 403", "note": "Bot-blocked, same as TechCabal." },
+    { "url": "https://apnews.com/hub/ap-top-news.rss", "error": "HTTP 404", "note": "AP changed their feed paths." }
+  ],
+  "notes": [
+    "The two wire feeds (PR Newswire, Business Wire) are extremely high volume and mostly get rejected by Scout as generic corporate PR. They earn their place only as the 'second source' corroboration the Verifier's 2-Source Rule needs. Consider dropping them if Claude API cost per weekly batch gets high.",
+    "Gaps worth filling later: Black/Latino/Asian local business journals, university alumni magazines, and regional press outside the US — none of the candidates tested had usable public feeds. A Google-Search-backed actor is the fallback (see docs/CONTENT_STRATEGY.md)."
+  ]
+}

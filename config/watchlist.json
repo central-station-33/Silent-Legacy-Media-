@@ -1,0 +1,141 @@
+{
+  "_comment": "Starter search seeds for the name/query-driven actors. UNLIKE config/rss-feeds.json, these entries are NOT individually verified — they are publicly-known investment vehicles, funds, and foundations used as search terms. A wrong or stale name simply returns no rows (cheap failure), so treat this as a starting roster to prune and extend as you see what actually hits. Nothing here is a published claim about anyone; the Verifier and the human editor still gate every story. See config/README.md.",
+
+  "form_d": {
+    "_actor": "pink_comic/sec-form-d-startup-funding-leads",
+    "_how_it_searches": "The `query` field matches the ISSUER name, not the people on the filing. Athletes/entertainers usually appear in `relatedPersons` (Executive Officer / Director / Promoter), NOT as the issuer. So run this two ways:",
+    "_strategy_a_targeted": "Search issuer names directly for known athlete/entertainer/diverse-GP funds and holding vehicles — these file their own Form Ds when they raise a fund. Use the `issuer_name_queries` list below.",
+    "_strategy_b_sweep": "Run broad periodic sweeps (no query, or a generic industry filter) and let the Scout agent scan each filing's `relatedPersons` for recognizable names. Bound cost with `maxResults` and `minOfferingAmount`. This is how you catch an athlete sitting on someone else's cap table.",
+    "issuer_name_queries": [
+      "SC30",
+      "Thirty Five Ventures",
+      "SpringHill",
+      "Serena Ventures",
+      "A-Rod Corp",
+      "Marcy Venture Partners",
+      "Roc Nation",
+      "QueensBridge Venture Partners",
+      "Melo7 Tech",
+      "JLC Infrastructure",
+      "HartBeat Ventures",
+      "Dreamers VC",
+      "Hoorae",
+      "Proximity Media",
+      "Outlier Society",
+      "Harlem Capital",
+      "MaC Venture Capital",
+      "Slauson",
+      "Base10 Partners",
+      "Precursor Ventures",
+      "Plexo Capital",
+      "Backstage Capital",
+      "Genius Guild",
+      "Collab Capital",
+      "Zeal Capital Partners",
+      "Concrete Rose",
+      "Fearless Fund",
+      "Cleo Capital",
+      "645 Ventures",
+      "Cake Ventures",
+      "New Voices Fund",
+      "Female Founders Fund",
+      "BBG Ventures",
+      "Rethink Impact"
+    ],
+    "sweep_settings_suggestion": {
+      "daysBack": 7,
+      "maxResults": 50,
+      "minOfferingAmount": 250000,
+      "_note": "Weekly cadence. minOfferingAmount filters out shell/micro filings; raise it if the batch is too noisy, lower it to catch smaller community/angel raises."
+    }
+  },
+
+  "sec_edgar": {
+    "_actor": "constant_quadruped/sec-edgar-filings-scraper",
+    "_how_it_searches": "By `tickers`, `cik`, or `companyName` — plus formTypes. Does NOT support Form D (that's why the Form D actor above exists as a separate source). Use this for equity-stake disclosures on public companies.",
+    "_form_types": ["SC 13D", "SC 13G", "S-1"],
+    "company_name_queries": [
+      "SpringHill",
+      "Roc Nation",
+      "Vista Equity Partners",
+      "World Wide Technology",
+      "Allen Media",
+      "Ariel Investments",
+      "ActOne Group",
+      "Magic Johnson Enterprises",
+      "Fenty",
+      "Parkwood",
+      "House of LR&C",
+      "V Starr",
+      "Blavity",
+      "Calendly"
+    ]
+  },
+
+  "irs_990": {
+    "_actor": "devilscrapes/irs-990-officer-comp",
+    "_how_it_searches": "`searchQuery` matches the nonprofit's name; `startYear`/`endYear` bound the filing years. Surfaces grant amounts, officer/board compensation, and multi-year asset growth — the 'quiet compounding' angle.",
+    "_year_range_suggestion": { "startYear": 2021, "endYear": 2025 },
+    "organization_queries": [
+      "LeBron James Family Foundation",
+      "Eat Learn Play Foundation",
+      "Kevin Durant Charity Foundation",
+      "Shawn Carter Foundation",
+      "Clara Lionel Foundation",
+      "Why Not You Foundation",
+      "Chris Paul Family Foundation",
+      "Wade's World Foundation",
+      "Carmelo Anthony Foundation",
+      "Magic Johnson Foundation",
+      "Know Your Rights Camp",
+      "Tyler Perry Foundation",
+      "Oprah Winfrey Charitable Foundation",
+      "A'ja Wilson Foundation",
+      "Thurgood Marshall College Fund",
+      "United Negro College Fund",
+      "National Urban League",
+      "Black Girls Code",
+      "Latino Community Foundation",
+      "Asian Americans Advancing Justice"
+    ],
+    "_note": "LeBron James Family Foundation was live-tested and returns real multi-year financials (revenue, expenses, assets, comp). The rest are unverified name guesses — prune the ones that miss."
+  },
+
+  "property_deeds": {
+    "_actor": "shelvick/property-deed-records",
+    "_how_it_searches": "`partyLookups` in the format \"STATE/Jurisdiction/Name\" or \"STATE/Name\". Coverage is uneven by jurisdiction: NYC has a native index; FL, IA, IN, MA, NH and NV REQUIRE the jurisdiction segment; elsewhere a state-level search fans out. Unsupported lookups return a free summary row, so a wrong guess costs nothing.",
+    "_strategy": "Deeds are searched by OWNER/LLC name, so this source only works once you know an entity name. Feed it names surfaced by the other five sources — an LLC from a Form D filing, a business-registry entry, or a news story — rather than guessing cold.",
+    "seed_party_lookups": [
+      "GA/Fulton/Tyler Perry Studios LLC",
+      "NY/New York/Roc Nation LLC",
+      "CA/Los Angeles/SpringHill Company LLC",
+      "IL/Cook/Magic Johnson Enterprises LLC"
+    ],
+    "_note": "These four are illustrative format examples, NOT verified hits. The real value of this source is as a second-stage lookup on entity names the pipeline already found."
+  },
+
+  "business_registry": {
+    "_actor": "scrapebench/socrata-multi-state-corporate-business-entity-registry",
+    "_coverage": "CO, CT, OR only — this is the actor's hard limit, not a config choice.",
+    "_how_it_searches": "`query` (or `queries`) substring-matches entity names; `sinceDate` gives delta pulls of newly formed entities.",
+    "trade_business_queries": [
+      "laundromat",
+      "car wash",
+      "plumbing",
+      "HVAC",
+      "electrical contracting",
+      "trucking",
+      "logistics",
+      "landscaping",
+      "childcare",
+      "barber",
+      "salon",
+      "catering",
+      "property management",
+      "housing trust",
+      "community fund",
+      "holdings"
+    ],
+    "_note": "These target the 'Legacy: Proof' pillar — everyday trade-business ownership. A bare registry entry usually lacks enough narrative for Scout to accept it on its own; it works best as corroboration for a news story about the same operator."
+  }
+}

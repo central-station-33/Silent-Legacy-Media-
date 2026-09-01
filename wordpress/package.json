@@ -1,0 +1,10 @@
+{
+  "name": "silent-legacy-wordpress",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup-categories": "node setup-categories.js",
+    "publish": "node publish.js"
+  }
+}

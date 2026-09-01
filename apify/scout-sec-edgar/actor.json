@@ -1,0 +1,9 @@
+{
+  "actorSpecification": 1,
+  "name": "silent-legacy-scout-sec-edgar",
+  "title": "Silent Legacy - SEC EDGAR Scout",
+  "description": "Polls SEC EDGAR full-text search for new filings (Form D, 13D/G, S-1) naming watched celebrity-backed LLCs and pushes matches to the Silent Legacy Make.com pipeline.",
+  "version": "0.1",
+  "input": "./input_schema.json",
+  "dockerfile": "./Dockerfile"
+}

@@ -1,0 +1,24 @@
+{
+  "title": "Silent Legacy News Scout input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "feedUrls": {
+      "title": "RSS/Atom feed URLs",
+      "type": "array",
+      "editor": "stringList",
+      "description": "Local news outlets, court-record feeds, and press-release wires to poll.",
+      "prefill": [
+        "https://www.prnewswire.com/rss/all-news-releases-list.rss",
+        "https://www.businesswire.com/portal/site/home/news/rss/"
+      ]
+    },
+    "lookbackHours": {
+      "title": "Lookback window (hours)",
+      "type": "integer",
+      "default": 3,
+      "description": "Only return items published within this many hours of the run."
+    }
+  },
+  "required": ["feedUrls"]
+}

@@ -1,0 +1,33 @@
+{
+  "title": "Silent Legacy SEC EDGAR Scout input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "watchTerms": {
+      "title": "Watch terms",
+      "type": "array",
+      "editor": "stringList",
+      "description": "Names/entities to search SEC EDGAR full-text search for (celebrity names, known holding-company LLCs, agent/agency names).",
+      "prefill": []
+    },
+    "formTypes": {
+      "title": "Form types",
+      "type": "array",
+      "editor": "stringList",
+      "description": "SEC form types to restrict the search to.",
+      "prefill": ["D", "SC 13D", "SC 13G", "S-1"]
+    },
+    "makeWebhookUrl": {
+      "title": "Make.com webhook URL",
+      "type": "string",
+      "editor": "textfield",
+      "description": "Destination for new-filing payloads. Falls back to the MAKE_WEBHOOK_URL env var."
+    },
+    "lookbackHours": {
+      "title": "Lookback window (hours)",
+      "type": "integer",
+      "default": 3
+    }
+  },
+  "required": ["watchTerms"]
+}

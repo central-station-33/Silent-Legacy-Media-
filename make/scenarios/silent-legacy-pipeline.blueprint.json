@@ -1,0 +1,167 @@
+{
+  "name": "Silent Legacy - Ingest to Editor Queue",
+  "description": "Webhook-triggered pipeline: Apify scout payload -> Claude Scout agent -> Claude Verifier agent -> (if approved) Claude Writer agent -> Retool pending-queue webhook.",
+  "flow": [
+    {
+      "id": 1,
+      "module": "gateway:CustomWebHook",
+      "name": "Apify Scout Webhook",
+      "notes": "Receives POSTs from all three Apify actors (news, sec-edgar, local-registry). Payload shape varies by source field.",
+      "parameters": {
+        "hook": "{{connections.silent_legacy_ingest_webhook}}"
+      }
+    },
+    {
+      "id": 2,
+      "module": "http:ActionSendData",
+      "name": "Call Claude - Scout Agent",
+      "notes": "System prompt from prompts/scout-agent.md. Bundle body: { model, max_tokens, system, messages: [{ role: 'user', content: JSON.stringify(webhook payload) }] }",
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "method": "POST",
+        "headers": {
+          "x-api-key": "{{connections.anthropic_api_key}}",
+          "anthropic-version": "2023-06-01",
+          "content-type": "application/json"
+        },
+        "body": {
+          "model": "claude-sonnet-5",
+          "max_tokens": 1024,
+          "system": "{{prompts.scout_agent_system}}",
+          "messages": [{ "role": "user", "content": "{{1.raw_body}}" }]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "module": "json:ParseJSON",
+      "name": "Parse Scout Output",
+      "parameters": { "source": "{{2.data.content[].text}}" }
+    },
+    {
+      "id": 4,
+      "module": "builtin:BasicRouter",
+      "name": "Scout Rejected?",
+      "routes": [
+        {
+          "condition": "{{3.reject}} = true",
+          "label": "Rejected - stop",
+          "flow": [
+            {
+              "id": 5,
+              "module": "util:NoOp",
+              "name": "Log rejection (optional: push to a Rejected data store for audit)"
+            }
+          ]
+        },
+        {
+          "condition": "{{3.reject}} = false",
+          "label": "Continue to Verifier",
+          "flow": [
+            {
+              "id": 6,
+              "module": "http:ActionSendData",
+              "name": "Call Claude - Verifier Agent",
+              "notes": "System prompt from prompts/verifier-agent.md. For pillar=proof, first aggregate related records for the same subject (a Make Data Store keyed on subject name, populated by every Scout-classified item) and include them as related_records_json.",
+              "parameters": {
+                "url": "https://api.anthropic.com/v1/messages",
+                "method": "POST",
+                "headers": {
+                  "x-api-key": "{{connections.anthropic_api_key}}",
+                  "anthropic-version": "2023-06-01",
+                  "content-type": "application/json"
+                },
+                "body": {
+                  "model": "claude-sonnet-5",
+                  "max_tokens": 1024,
+                  "system": "{{prompts.verifier_agent_system}}",
+                  "messages": [
+                    {
+                      "role": "user",
+                      "content": "Scout output:\n{{3}}\n\nAdditional corroborating records found for this subject in the current window (may be empty):\n{{related_records}}"
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "id": 7,
+              "module": "json:ParseJSON",
+              "name": "Parse Verifier Output",
+              "parameters": { "source": "{{6.data.content[].text}}" }
+            },
+            {
+              "id": 8,
+              "module": "builtin:BasicRouter",
+              "name": "Verifier Approved?",
+              "routes": [
+                {
+                  "condition": "{{7.approved}} = false",
+                  "label": "Rejected by anti-scam rules - stop",
+                  "flow": [
+                    {
+                      "id": 9,
+                      "module": "util:NoOp",
+                      "name": "Log rejection with failedRules + editorNote for audit"
+                    }
+                  ]
+                },
+                {
+                  "condition": "{{7.approved}} = true",
+                  "label": "Continue to Writer",
+                  "flow": [
+                    {
+                      "id": 10,
+                      "module": "http:ActionSendData",
+                      "name": "Call Claude - Writer Agent",
+                      "notes": "System prompt from prompts/writer-agent.md.",
+                      "parameters": {
+                        "url": "https://api.anthropic.com/v1/messages",
+                        "method": "POST",
+                        "headers": {
+                          "x-api-key": "{{connections.anthropic_api_key}}",
+                          "anthropic-version": "2023-06-01",
+                          "content-type": "application/json"
+                        },
+                        "body": {
+                          "model": "claude-sonnet-5",
+                          "max_tokens": 2048,
+                          "system": "{{prompts.writer_agent_system}}",
+                          "messages": [{ "role": "user", "content": "{{3}}" }]
+                        }
+                      }
+                    },
+                    {
+                      "id": 11,
+                      "module": "json:ParseJSON",
+                      "name": "Parse Writer Output",
+                      "parameters": { "source": "{{10.data.content[].text}}" }
+                    },
+                    {
+                      "id": 12,
+                      "module": "http:ActionSendData",
+                      "name": "Push to Retool Pending Queue",
+                      "notes": "See retool/EDITOR_PORTAL_SPEC.md for the exact webhook contract this must match.",
+                      "parameters": {
+                        "url": "{{connections.retool_webhook_url}}",
+                        "method": "POST",
+                        "headers": { "content-type": "application/json" },
+                        "body": {
+                          "status": "pending",
+                          "pillar": "{{3.pillar}}",
+                          "scout": "{{3}}",
+                          "verifier": "{{7}}",
+                          "content": "{{11}}"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
