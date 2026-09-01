@@ -7,7 +7,7 @@ running, so it doesn't only exist in chat history.
 ## Make.com (team "My Team", org "My Organization")
 
 Folder: **Silent Legacy Media** (id `274107`), kept separate from the
-account's pre-existing "InRange" folders.
+account's other, pre-existing folders and automations.
 
 **Architecture (updated 2026-09-01): ingestion and AI processing are
 decoupled into two layers**, to guarantee no execution ever times out
@@ -121,7 +121,8 @@ runs fine on the Store actor in the meantime.
 
 ## Retool Postgres
 
-Two tables in the same database InRange already uses:
+Two tables in the same shared Retool Postgres database already used by
+other automations on this account:
 
 - `silent_legacy_stories` — the editorial queue (see
   `retool/EDITOR_PORTAL_SPEC.md` for schema). `scheduled_publish_at` and
@@ -190,11 +191,12 @@ multi-bundle and there is no `.result`.
 **Fix.** The `BasicFeeder` was removed entirely; downstream modules now
 reference `{{1.<column>}}` directly.
 
-**Note for the InRange scenarios:** `InRange - S3: CC Scoring + Lead
-Delivery to Retool` uses the same `postgres:Query` → `BasicFeeder` over
-`{{1.result}}` pattern and is likely broken in exactly this way. Worth
-checking — it was not touched here since it belongs to the other project.
-(The pattern is fine for HTTP modules, e.g. InRange S2's feeder over
-`{{2.data}}` — `http:ActionSendData` really does return a single bundle
-with an array inside. It is specifically the Postgres module that differs.)
+**Note for other scenarios on this Make account:** at least one other,
+unrelated scenario elsewhere on this account uses the same
+`postgres:Query` → `BasicFeeder` over `{{1.result}}` pattern and is
+likely broken in exactly this way. Worth checking — it was not touched
+here since it belongs to a different project. (The pattern is fine for
+HTTP modules — `http:ActionSendData` really does return a single bundle
+with an array inside. It is specifically the Postgres module that
+differs.)
 
