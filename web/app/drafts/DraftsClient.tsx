@@ -61,22 +61,34 @@ export function EditDraftButton({ draft }: { draft: Draft }) {
 
 export function ApproveButton({ id }: { id: number }) {
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
-    <button
-      disabled={pending}
-      onClick={async () => {
-        setPending(true);
-        await approveDraft(id);
-      }}
-      className="text-sm text-emerald-700 hover:underline disabled:opacity-50"
-    >
-      Approve
-    </button>
+    <div className="text-right">
+      <button
+        disabled={pending}
+        onClick={async () => {
+          setPending(true);
+          setError(null);
+          try {
+            await approveDraft(id);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to approve draft.");
+          } finally {
+            setPending(false);
+          }
+        }}
+        className="text-sm text-emerald-700 hover:underline disabled:opacity-50"
+      >
+        Approve
+      </button>
+      {error && <div className="text-xs text-red-600 mt-0.5 max-w-xs">{error}</div>}
+    </div>
   );
 }
 
 export function RejectButton({ id }: { id: number }) {
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
     <>
       <button onClick={() => setOpen(true)} className="text-sm text-red-700 hover:underline">
@@ -86,8 +98,12 @@ export function RejectButton({ id }: { id: number }) {
         <Modal title="Reject draft" onClose={() => setOpen(false)}>
           <form
             action={async (fd) => {
-              await rejectDraft(id, fd);
-              setOpen(false);
+              try {
+                await rejectDraft(id, fd);
+                setOpen(false);
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to reject draft.");
+              }
             }}
             className="space-y-3"
           >
@@ -100,6 +116,7 @@ export function RejectButton({ id }: { id: number }) {
                 className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
               />
             </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
             <FormActions onCancel={() => setOpen(false)} submitLabel="Reject" danger />
           </form>
         </Modal>

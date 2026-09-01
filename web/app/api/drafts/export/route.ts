@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabase, escapePostgrestValue } from "@/lib/supabase";
 import type { Draft } from "@/lib/types";
 
 function csvEscape(value: unknown): string {
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   if (pillar) query = query.eq("pillar", pillar);
   if (status) query = query.eq("status", status);
   if (q) {
-    const like = `%${q}%`;
+    const like = escapePostgrestValue(`%${q}%`);
     query = query.or(
       `title.ilike.${like},subject_name.ilike.${like},primary_source_url.ilike.${like},body_content.ilike.${like}`
     );

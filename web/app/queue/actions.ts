@@ -47,7 +47,10 @@ export async function updateStoryContent(id: string, content: ContentResult) {
 export async function approveStory(id: string, decidedBy: string, content: ContentResult) {
   const scheduledPublishAt = await nextPublishSlot();
 
-  const { error } = await supabase()
+  // .eq("status", "pending") guards against double-approving the same
+  // story (two clicks, two tabs) -- without it, a second approve would
+  // silently recompute a new schedule and re-fire the Make webhook.
+  const { data: updated, error } = await supabase()
     .from("silent_legacy_stories")
     .update({
       status: "approved",
@@ -56,9 +59,14 @@ export async function approveStory(id: string, decidedBy: string, content: Conte
       decided_by: decidedBy || "unknown",
       scheduled_publish_at: scheduledPublishAt,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "pending")
+    .select();
 
   if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) {
+    throw new Error("This story is no longer pending -- it may have already been approved or rejected.");
+  }
 
   const { data: story } = await supabase()
     .from("silent_legacy_stories")
@@ -80,7 +88,7 @@ export async function rejectStory(id: string, decidedBy: string, formData: FormD
   const editorNote = String(formData.get("editor_note") ?? "").trim();
   if (!editorNote) throw new Error("A rejection reason is required.");
 
-  const { error } = await supabase()
+  const { data: updated, error } = await supabase()
     .from("silent_legacy_stories")
     .update({
       status: "rejected",
@@ -88,8 +96,13 @@ export async function rejectStory(id: string, decidedBy: string, formData: FormD
       decided_at: new Date().toISOString(),
       decided_by: decidedBy || "unknown",
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "pending")
+    .select();
 
   if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) {
+    throw new Error("This story is no longer pending -- it may have already been approved or rejected.");
+  }
   revalidatePath("/queue");
 }

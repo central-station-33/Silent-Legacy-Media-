@@ -14,6 +14,8 @@ export type Draft = {
   status: DraftStatus;
   rejection_reason: string | null;
   published_at: string | null;
+  ghost_post_id: string | null;
+  ghost_url: string | null;
 };
 
 export type StoryPillar = "pro" | "w" | "proof";
@@ -53,4 +55,6 @@ export type Story = {
   created_at: string;
   decided_at: string | null;
   decided_by: string | null;
+  ghost_post_id: string | null;
+  ghost_url: string | null;
 };

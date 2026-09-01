@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { supabase, escapePostgrestValue } from "@/lib/supabase";
 import type { Draft, DraftStatus } from "@/lib/types";
 import { NewDraftButton, EditDraftButton, ApproveButton, RejectButton } from "./DraftsClient";
 
@@ -13,7 +13,7 @@ async function loadDrafts(params: SearchParams) {
   if (params.pillar) query = query.eq("pillar", params.pillar);
   if (params.status) query = query.eq("status", params.status);
   if (params.q) {
-    const q = `%${params.q}%`;
+    const q = escapePostgrestValue(`%${params.q}%`);
     query = query.or(
       `title.ilike.${q},subject_name.ilike.${q},primary_source_url.ilike.${q},body_content.ilike.${q},x_thread_text.ilike.${q},video_script.ilike.${q}`
     );
@@ -143,13 +143,23 @@ export default async function DraftsPage({
                 </td>
                 <td className="px-4 py-2 text-slate-500">{new Date(d.created_at).toLocaleDateString()}</td>
                 <td className="px-4 py-2">
-                  <div className="flex justify-end gap-3">
+                  <div className="flex justify-end items-start gap-3">
                     <EditDraftButton draft={d} />
                     {d.status === "Pending" && (
                       <>
                         <ApproveButton id={d.id} />
                         <RejectButton id={d.id} />
                       </>
+                    )}
+                    {d.status === "Approved" && d.ghost_url && (
+                      <a
+                        href={d.ghost_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-600 hover:underline"
+                      >
+                        View post
+                      </a>
                     )}
                   </div>
                 </td>
