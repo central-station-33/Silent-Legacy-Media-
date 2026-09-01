@@ -143,13 +143,23 @@ export default async function DraftsPage({
                 </td>
                 <td className="px-4 py-2 text-slate-500">{new Date(d.created_at).toLocaleDateString()}</td>
                 <td className="px-4 py-2">
-                  <div className="flex justify-end gap-3">
+                  <div className="flex justify-end items-start gap-3">
                     <EditDraftButton draft={d} />
                     {d.status === "Pending" && (
                       <>
                         <ApproveButton id={d.id} />
                         <RejectButton id={d.id} />
                       </>
+                    )}
+                    {d.status === "Approved" && d.ghost_url && (
+                      <a
+                        href={d.ghost_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-blue-600 hover:underline"
+                      >
+                        View post
+                      </a>
                     )}
                   </div>
                 </td>

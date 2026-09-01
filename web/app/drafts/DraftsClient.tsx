@@ -61,17 +61,28 @@ export function EditDraftButton({ draft }: { draft: Draft }) {
 
 export function ApproveButton({ id }: { id: number }) {
   const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
-    <button
-      disabled={pending}
-      onClick={async () => {
-        setPending(true);
-        await approveDraft(id);
-      }}
-      className="text-sm text-emerald-700 hover:underline disabled:opacity-50"
-    >
-      Approve
-    </button>
+    <div className="text-right">
+      <button
+        disabled={pending}
+        onClick={async () => {
+          setPending(true);
+          setError(null);
+          try {
+            await approveDraft(id);
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to approve draft.");
+          } finally {
+            setPending(false);
+          }
+        }}
+        className="text-sm text-emerald-700 hover:underline disabled:opacity-50"
+      >
+        Approve
+      </button>
+      {error && <div className="text-xs text-red-600 mt-0.5 max-w-xs">{error}</div>}
+    </div>
   );
 }
 

@@ -295,19 +295,48 @@ reprocessing, but you can't yet distinguish "rejected" from "a run
 crashed mid-batch" by querying status alone. Fine for now; worth adding
 a distinct status value later if that visibility matters.
 
-## WordPress — not connected
+## WordPress — superseded by Ghost, never connected
 
 `wordpress/publish.js`, `setup-categories.js`, and `wp-client.js` are
 written but have never run against a live site — the WordPress.com
-connector was never enabled in this working session. This blocks two
-things downstream: the actual publish step, and the "Trickle Publish"
-Make scenario described in `retool/EDITOR_PORTAL_SPEC.md` (a scheduled
-scenario that polls for `approved` stories whose `scheduled_publish_at`
-has arrived and publishes them, staggering a weekly batch of ~20-30
-approved stories across the week rather than dumping them all at once).
-Neither the Trickle Publish scenario nor its companion "Publish Trigger"
-webhook (fired by Retool's Approve button) has been built yet — both
-need WordPress connected first.
+connector was never enabled. **The decision was since made to publish to
+Ghost instead of WordPress** (see "Ghost — publishing target" below), so
+this code is now dead — kept only for historical reference, not something
+to finish.
+
+## Ghost — publishing target (needs a site set up)
+
+Ghost(Pro) was chosen as the publish target, replacing WordPress. As of
+this writing **no Ghost site exists yet** — that's a manual signup step
+(ghost.org/pricing) someone with billing access needs to do, then grab an
+Admin API key from Settings → Integrations → Add custom integration.
+
+The integration code is built and waiting on those credentials
+(`web/lib/ghost.ts`, JWT-signed Admin API client, `?source=html` post
+creation so no Lexical document building is needed):
+
+- **`/drafts`** publishes immediately on Approve (`web/app/drafts/actions.ts`).
+  No-ops until `GHOST_API_URL`/`GHOST_ADMIN_API_KEY` are set — the draft
+  still gets marked Approved, just without a real post. Once Ghost is
+  live, a failed publish keeps the draft at `Pending` instead of silently
+  approving unpublished content.
+- **`/queue`** keeps the original staggered "trickle publish" design from
+  `retool/EDITOR_PORTAL_SPEC.md` (3-4/day across the week, not a dump of
+  20-30 at once): Approve only computes `scheduled_publish_at`. A new
+  route, `POST /api/publish-due` (protected by `PUBLISH_CRON_SECRET`),
+  does the actual publishing for whatever's due — but **nothing calls it
+  yet**. It needs an external scheduler hitting it every 15-30 minutes:
+  Supabase pg_cron + pg_net (free, no extra hosting) or a Vercel Cron Job
+  (works the same way, but Hobby plan crons are limited to once/day,
+  which is too infrequent for same-day trickle publishing — needs Pro).
+  See `web/README.md`'s "Publishing (Ghost)" section for exact setup.
+
+**Priority order once a Ghost site exists:**
+1. Set `GHOST_API_URL` / `GHOST_ADMIN_API_KEY` in Vercel, redeploy.
+2. Test one Approve on `/drafts` — confirm a real post lands in Ghost.
+3. Set `PUBLISH_CRON_SECRET`, wire up the scheduler (pg_cron or Vercel
+   Cron) to call `/api/publish-due`, confirm an approved-and-due
+   `/queue` story actually publishes on the next tick.
 
 ## Key architectural decisions and why
 
@@ -407,15 +436,22 @@ id `6112987` ("ZZ Debug - probe postgres output shape") and table
    after the BasicFeeder fix has been confirmed with live data yet.
 2. Set up Apify weekly schedules (manual, in Apify Console) — the one
    remaining step blocking unattended operation.
-3. Connect WordPress.com, then build the Publish Trigger webhook and
-   Trickle Publish scenario described in `retool/EDITOR_PORTAL_SPEC.md`.
-4. Build the actual Retool Chief Editor Portal app from the spec.
-5. Paste the real `apify/scout-news` source into the custom actor
+3. Set up Ghost(Pro), set `GHOST_API_URL`/`GHOST_ADMIN_API_KEY` in
+   Vercel, then wire a scheduler (Supabase pg_cron or Vercel Cron) to
+   call `/api/publish-due` — see "Ghost — publishing target" above. The
+   app-side code for both immediate (`/drafts`) and staggered
+   (`/queue`) publishing is already built and waiting on this.
+4. ~~Build the actual Retool Chief Editor Portal app from the spec~~ —
+   done, see "Retool retired" above (`web/queue`).
+5. Re-point the live Make.com scenarios' Postgres connection at the new
+   Supabase project (see "Retool retired" above) — `/queue` is empty
+   until this happens.
+6. Paste the real `apify/scout-news` source into the custom actor
    `slm27/Silent-Legacy-Media` (optional — Store actor works fine
    meanwhile).
-6. Subject-history aggregation for the Verifier's 2-Source Rule (right
+7. Subject-history aggregation for the Verifier's 2-Source Rule (right
    now each story is verified against only its own single source
    record).
-7. Distinct terminal status for rejected raw items (currently stuck at
+8. Distinct terminal status for rejected raw items (currently stuck at
    `'processing'`, see "Known gap" above).
-8. Delete the two debug artifacts (`6112987` scenario, `debug_probe` table).
+9. Delete the two debug artifacts (`6112987` scenario, `debug_probe` table).

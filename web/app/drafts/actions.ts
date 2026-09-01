@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { supabase } from "@/lib/supabase";
-import type { DraftPillar } from "@/lib/types";
+import { publishToGhost, textToHtml } from "@/lib/ghost";
+import type { Draft, DraftPillar } from "@/lib/types";
 
 const PILLARS: DraftPillar[] = ["Pro", "W", "Proof"];
 
@@ -67,9 +68,33 @@ export async function updateDraft(id: number, formData: FormData) {
 }
 
 export async function approveDraft(id: number) {
+  const { data: draft, error: fetchError } = await supabase()
+    .from("drafts")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (fetchError) throw new Error(fetchError.message);
+
+  // Ghost is optional until it's set up (GHOST_API_URL / GHOST_ADMIN_API_KEY) --
+  // publishToGhost returns null rather than throwing when unconfigured, so
+  // approving still works before Ghost exists. A configured-but-failing
+  // call throws and the draft stays Pending, since "approved" should mean
+  // "actually published."
+  const published = await publishToGhost({
+    title: (draft as Draft).title,
+    html: textToHtml((draft as Draft).body_content),
+    tags: [(draft as Draft).pillar],
+  });
+
   const { error } = await supabase()
     .from("drafts")
-    .update({ status: "Approved", published_at: new Date().toISOString(), rejection_reason: null })
+    .update({
+      status: "Approved",
+      published_at: new Date().toISOString(),
+      rejection_reason: null,
+      ghost_post_id: published?.id ?? null,
+      ghost_url: published?.url ?? null,
+    })
     .eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/drafts");
