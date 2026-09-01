@@ -167,3 +167,49 @@ Two tables in the same database InRange already uses:
   querying status alone. Fine for now; worth adding a distinct status
   value and/or a stale-`'processing'` cleanup query if that visibility
   matters later.
+
+## Open issue: no story has ever reached `silent_legacy_stories` (2026-09-01)
+
+Across every test this session, `silent_legacy_stories` has stayed at **0
+rows**. Individually each rejection looked correct (generic PR Newswire
+items, a Tesla 8-K, a $1.5B institutional VC fund's Form D — none are
+Silent Legacy stories), so this may simply be that no on-pillar item has
+been fed through yet. But it has never been *positively* confirmed that
+the Verifier → Writer → insert path can produce a row, so a latent bug
+there cannot be ruled out.
+
+What is confirmed: ingestion works (raw items land in
+`silent_legacy_raw_items`), and the Processing scenario consumes ~9
+operations with ~700 bytes transfer per populated run versus 2 operations
+on an empty queue — i.e. Claude calls really are executing.
+
+To close this out, two things were added but **not yet verified**:
+
+- A `scout_result jsonb` column on `silent_legacy_raw_items`, plus a
+  module that writes Scout's verdict for **every** item (rejected or not)
+  before the filtered Verifier/Writer steps. This also fixes the older
+  problem where rejected items stuck at `status = 'processing'` forever —
+  they now go to `'processed'` uniformly.
+- The claim step was changed from `UPDATE ... RETURNING` to a plain
+  `SELECT` + per-item `UPDATE` claim, matching the proven pattern in this
+  account's InRange scenarios, on the theory that the Postgres module may
+  not expose `RETURNING` rows in `.result`. (Operations counts suggest
+  Claude ran under both versions, so this may not have been the cause.)
+
+**Next diagnostic step**, once a run has processed some items:
+
+```sql
+SELECT source_type,
+       scout_result->>'reject'  AS rejected,
+       scout_result->>'reason'  AS reason,
+       scout_result->>'subject' AS subject
+FROM silent_legacy_raw_items
+WHERE scout_result IS NOT NULL
+ORDER BY processed_at DESC
+LIMIT 10;
+```
+
+If `scout_result` is populated, Scout's reasoning is now visible and the
+rejections can be judged on their merits. If it is still NULL after a run
+that consumed 9 operations, the bug is in the mapping between the feeder
+and the Postgres modules (`{{2.id}}`), not in the agents.
