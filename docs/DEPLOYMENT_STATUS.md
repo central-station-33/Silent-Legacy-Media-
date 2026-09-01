@@ -41,37 +41,28 @@ Items"): no app trigger — starts directly with a `postgres:Query` and
 runs on Make's own schedule (`indefinitely`, every 600s / 10 min,
 tunable). Each run:
 
-1. Claims up to 8 unclaimed rows atomically: `UPDATE
-   silent_legacy_raw_items SET status = 'processing' WHERE id IN (SELECT
-   ... WHERE status = 'scraped' ORDER BY scraped_at ASC LIMIT 8 FOR
-   UPDATE SKIP LOCKED) RETURNING ...` — the `SKIP LOCKED` claim pattern
-   means overlapping runs never double-process the same row (same
-   pattern already used elsewhere in this account's InRange scenarios).
-2. `builtin:BasicFeeder` over the claimed rows.
-3. Scout → Verifier (filtered) → Writer (filtered) → insert into
-   `silent_legacy_stories`, using `{{2.source_type}}` and
-   `{{toString(2.raw_payload)}}` dynamically instead of 5 copies of the
-   same prompt — one shared Scout/Verifier/Writer block now serves all
-   sources.
-4. On the success path only, marks the raw item `status = 'processed'`.
-   Rejected/unapproved items simply stay `'processing'` (never
-   re-queried, since the claim step already excluded them from
-   `'scraped'`) — intentional simplification, see "Not yet done" below.
+1. `SELECT id, source_type, raw_payload ... WHERE status = 'scraped'
+   ORDER BY scraped_at ASC LIMIT 8`. Make's Postgres module emits **one
+   bundle per row**, so every module below runs once per row — there is
+   deliberately **no iterator/feeder** (see "Resolved 2026-09-01" below
+   for why that matters).
+2. `UPDATE ... SET status = 'processing' WHERE id = '{{1.id}}'` — claims
+   the row so a concurrent run can't pick it up again.
+3. **Scout** (Claude), using `{{1.source_type}}` and
+   `{{toString(1.raw_payload)}}` — one shared prompt serves all six
+   source types instead of six near-duplicate copies.
+4. `UPDATE ... SET scout_result = <Scout's JSON>, status = 'processed'`
+   — **unfiltered, so it records a verdict for every item**, accepted or
+   rejected. This is the observability hook: `scout_result` is how you
+   see *why* something was rejected.
+5. **Verifier** (Claude) — filtered to `{{3.reject}} = false`.
+6. **Writer** (Claude) — filtered to `{{5.approved}} = true`.
+7. `INSERT INTO silent_legacy_stories ...` — the pending editorial row.
 
 Reuses existing connections: Anthropic Claude (id `8033899`), Retool
 Postgres (id `8042168`). Batch size (8) and interval (10 min) are both
-tunable in the Processing scenario if throughput needs adjusting —
-smaller/more frequent is safer against timeouts, larger/less frequent
-processes the weekly backlog faster.
-
-Verified 2026-09-01: staged 8 real RSS items via a live Apify run,
-confirmed layer 1 inserted them in `silent_legacy_raw_items` in ~10s, ran
-layer 2 once (`scenarios_run`), confirmed all 8 were atomically claimed
-(`status: 'processing'`) and run through Scout — all 8 were correctly
-rejected (generic PR Newswire press releases, same rejection behavior as
-prior tests) so 0 stories were inserted, which is expected data, not a
-bug. Total layer-2 execution: ~1.5s. No timeout, decoupled architecture
-confirmed working end-to-end.
+tunable if throughput needs adjusting — smaller/more frequent is safer
+against timeouts, larger/less frequent clears a weekly backlog faster.
 
 **Apify connection: `7039434`** ("My Apify API"), authenticated as the
 `chrisroman193@gmail.com` account — the account that owns the actors and
@@ -168,48 +159,42 @@ Two tables in the same database InRange already uses:
   value and/or a stale-`'processing'` cleanup query if that visibility
   matters later.
 
-## Open issue: no story has ever reached `silent_legacy_stories` (2026-09-01)
+## Resolved 2026-09-01: the processor never called Claude at all
 
-Across every test this session, `silent_legacy_stories` has stayed at **0
-rows**. Individually each rejection looked correct (generic PR Newswire
-items, a Tesla 8-K, a $1.5B institutional VC fund's Form D — none are
-Silent Legacy stories), so this may simply be that no on-pillar item has
-been fed through yet. But it has never been *positively* confirmed that
-the Verifier → Writer → insert path can produce a row, so a latent bug
-there cannot be ruled out.
+For most of this build, `silent_legacy_stories` stayed at 0 rows and every
+item looked "rejected by Scout." That reading was wrong. **Scout was never
+invoked.** The Processing scenario was silently doing nothing past its
+second module.
 
-What is confirmed: ingestion works (raw items land in
-`silent_legacy_raw_items`), and the Processing scenario consumes ~9
-operations with ~700 bytes transfer per populated run versus 2 operations
-on an empty queue — i.e. Claude calls really are executing.
+**Root cause.** Make's `postgres:Query` module emits **one bundle per
+row**, with the columns addressable directly (`{{1.id}}`,
+`{{1.source_type}}`, ...). It does **not** return a `.result` array. The
+scenario fed a `builtin:BasicFeeder` from `{{1.result}}`, which was always
+empty, so the feeder emitted zero bundles and every module after it —
+Scout, Verifier, Writer, the inserts — never ran.
 
-To close this out, two things were added but **not yet verified**:
+This was masked by two misleading signals:
 
-- A `scout_result jsonb` column on `silent_legacy_raw_items`, plus a
-  module that writes Scout's verdict for **every** item (rejected or not)
-  before the filtered Verifier/Writer steps. This also fixes the older
-  problem where rejected items stuck at `status = 'processing'` forever —
-  they now go to `'processed'` uniformly.
-- The claim step was changed from `UPDATE ... RETURNING` to a plain
-  `SELECT` + per-item `UPDATE` claim, matching the proven pattern in this
-  account's InRange scenarios, on the theory that the Postgres module may
-  not expose `RETURNING` rows in `.result`. (Operations counts suggest
-  Claude ran under both versions, so this may not have been the cause.)
+- Runs reported ~9 operations and ~700 bytes transfer, which looked like
+  Claude activity. It was actually the SELECT plus one feeder invocation
+  per returned row.
+- Run durations of 1.5-2s were far too short for 8 sequential Sonnet
+  calls. That was noticed at the time and wrongly dismissed.
 
-**Next diagnostic step**, once a run has processed some items:
+**How it was found.** A throwaway probe scenario wrote
+`{{toString(1)}}`, `{{1.id}}` and `{{1.result}}` into a `debug_probe`
+table. Result: `{{1.id}}` was a real UUID, `{{1.result}}` was empty, and
+the probe's second module ran once per row — proving the module is
+multi-bundle and there is no `.result`.
 
-```sql
-SELECT source_type,
-       scout_result->>'reject'  AS rejected,
-       scout_result->>'reason'  AS reason,
-       scout_result->>'subject' AS subject
-FROM silent_legacy_raw_items
-WHERE scout_result IS NOT NULL
-ORDER BY processed_at DESC
-LIMIT 10;
-```
+**Fix.** The `BasicFeeder` was removed entirely; downstream modules now
+reference `{{1.<column>}}` directly.
 
-If `scout_result` is populated, Scout's reasoning is now visible and the
-rejections can be judged on their merits. If it is still NULL after a run
-that consumed 9 operations, the bug is in the mapping between the feeder
-and the Postgres modules (`{{2.id}}`), not in the agents.
+**Note for the InRange scenarios:** `InRange - S3: CC Scoring + Lead
+Delivery to Retool` uses the same `postgres:Query` → `BasicFeeder` over
+`{{1.result}}` pattern and is likely broken in exactly this way. Worth
+checking — it was not touched here since it belongs to the other project.
+(The pattern is fine for HTTP modules, e.g. InRange S2's feeder over
+`{{2.data}}` — `http:ActionSendData` really does return a single bundle
+with an array inside. It is specifically the Postgres module that differs.)
+
