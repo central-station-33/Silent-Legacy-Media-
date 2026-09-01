@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { supabase, escapePostgrestValue } from "@/lib/supabase";
 import type { Draft, DraftStatus } from "@/lib/types";
 import { NewDraftButton, EditDraftButton, ApproveButton, RejectButton } from "./DraftsClient";
 
@@ -13,7 +13,7 @@ async function loadDrafts(params: SearchParams) {
   if (params.pillar) query = query.eq("pillar", params.pillar);
   if (params.status) query = query.eq("status", params.status);
   if (params.q) {
-    const q = `%${params.q}%`;
+    const q = escapePostgrestValue(`%${params.q}%`);
     query = query.or(
       `title.ilike.${q},subject_name.ilike.${q},primary_source_url.ilike.${q},body_content.ilike.${q},x_thread_text.ilike.${q},video_script.ilike.${q}`
     );

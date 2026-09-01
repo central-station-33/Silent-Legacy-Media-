@@ -74,6 +74,9 @@ export async function approveDraft(id: number) {
     .eq("id", id)
     .single();
   if (fetchError) throw new Error(fetchError.message);
+  if ((draft as Draft).status !== "Pending") {
+    throw new Error("This draft is no longer pending -- it may have already been approved or rejected.");
+  }
 
   // Ghost is optional until it's set up (GHOST_API_URL / GHOST_ADMIN_API_KEY) --
   // publishToGhost returns null rather than throwing when unconfigured, so
@@ -86,7 +89,13 @@ export async function approveDraft(id: number) {
     tags: [(draft as Draft).pillar],
   });
 
-  const { error } = await supabase()
+  // The `.eq("status", "Pending")` re-check here (not just the read above)
+  // closes the race window where two concurrent Approve clicks -- or one
+  // click plus a retry -- both pass the read check and would otherwise
+  // both call Ghost and both write. Only the first write actually matches
+  // a Pending row; the second gets 0 rows back and errors instead of
+  // silently double-publishing.
+  const { data: updated, error } = await supabase()
     .from("drafts")
     .update({
       status: "Approved",
@@ -95,8 +104,17 @@ export async function approveDraft(id: number) {
       ghost_post_id: published?.id ?? null,
       ghost_url: published?.url ?? null,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "Pending")
+    .select();
   if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) {
+    throw new Error(
+      published
+        ? `Published to Ghost (${published.url}) but this draft was already decided by someone else -- check for a duplicate post.`
+        : "This draft is no longer pending -- it may have already been approved or rejected."
+    );
+  }
   revalidatePath("/drafts");
 }
 
@@ -104,10 +122,15 @@ export async function rejectDraft(id: number, formData: FormData) {
   const reason = str(formData, "rejection_reason");
   if (!reason) throw new Error("A rejection reason is required.");
 
-  const { error } = await supabase()
+  const { data: updated, error } = await supabase()
     .from("drafts")
     .update({ status: "Rejected", rejection_reason: reason })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "Pending")
+    .select();
   if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) {
+    throw new Error("This draft is no longer pending -- it may have already been approved or rejected.");
+  }
   revalidatePath("/drafts");
 }
