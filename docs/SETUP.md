@@ -48,28 +48,49 @@ runs.
 
 ## 2. Orchestration — Make.com
 
-Five near-identical scenarios (one per source) live in the
-"Silent Legacy Media" folder, each:
+Ingestion and AI processing are two separate layers (see
+`docs/ARCHITECTURE.md` for why — in short, decoupling them guarantees no
+execution times out no matter how large a weekly batch gets).
+
+**Five Ingestion scenarios** (one per source) live in the "Silent Legacy
+Media" folder, each:
 
 1. **Trigger**: `apify:finishedActorRuns` ("Watch Actor Runs") — native
    Make/Apify integration, fires whenever that specific actor finishes a
    run under the connected Apify account. No webhook URL or API token to
    manage by hand.
 2. **`apify:fetchDatasetItems`** ("Get Dataset Items") — pulls the run's
-   dataset via the same connection; each item becomes its own bundle for
-   everything downstream (no manual loop/feeder needed).
+   dataset via the same connection; each item becomes its own bundle.
+3. **`postgres:Query`** — inserts the raw item into `silent_legacy_raw_items`
+   (`status: 'scraped'`). That's it — no Claude calls in this layer.
+
+To extend to a 6th source: duplicate one of these scenarios and point its
+trigger at a new "Watch Actor Runs" hook for the new actor; the literal
+source-type string is baked into the `INSERT`'s value, not into a prompt.
+
+**One Processing scenario** ("Silent Legacy - Process Raw Items") runs
+on its own 10-minute schedule (not tied to any Apify actor):
+
+1. **`postgres:Query`** — atomically claims a bounded batch (8 rows) of
+   `'scraped'` items with `UPDATE ... FOR UPDATE SKIP LOCKED RETURNING
+   ...`, so overlapping runs can't double-process a row.
+2. **`builtin:BasicFeeder`** — iterates the claimed batch.
 3. **Scout** (`anthropic-claude:createAMessage`) — classifies + extracts,
-   per `prompts/scout-agent.md`.
+   per `prompts/scout-agent.md`, using the claimed row's `source_type`
+   and `raw_payload` dynamically (one shared prompt now serves all 5
+   sources, instead of 5 near-duplicate copies).
 4. **Verifier** (filtered to run only if Scout didn't reject) — anti-scam
    gate, per `prompts/verifier-agent.md`.
 5. **Writer** (filtered to run only if Verifier approved) — drafts copy,
    per `prompts/writer-agent.md`.
 6. **`postgres:Query`** — inserts the pending story into
-   `silent_legacy_stories` (see step 3).
+   `silent_legacy_stories`.
+7. **`postgres:Query`** — marks the raw item `'processed'` (success path
+   only; rejected items stay `'processing'`, which is enough to keep them
+   out of future batches).
 
-To extend to a 6th source: duplicate one of these scenarios, point its
-trigger at a new "Watch Actor Runs" hook for the new actor, and change the
-literal `"Source type: ..."` string in the Scout call's user message.
+Batch size and interval are both tunable directly on this one scenario if
+throughput needs adjusting.
 
 ## 3. Editorial queue — Retool
 

@@ -1,41 +1,24 @@
-# Make.com scenario blueprint
+# Make.com scenarios
 
-`silent-legacy-pipeline.blueprint.json` is a **readable spec** of the
-scenario's modules, order, and routing logic — not a literal Make.com
-export (Make's native blueprint format uses internal module IDs specific
-to an account and isn't hand-writable). Use it as the build spec: recreate
-each module in the Make scenario editor in the order and with the
-parameters shown, then export the real blueprint from Make once built and
-commit that alongside this file for future reference.
+`silent-legacy-pipeline.blueprint.json` is the **original design spec**
+(single webhook-triggered scenario, HTTP calls to Claude) — kept for
+history, but **superseded**. What's actually deployed is different in
+two ways:
 
-## Modules, in order
+1. Ingestion uses Make's native `apify:finishedActorRuns` ("Watch Actor
+   Runs") trigger per source instead of a shared custom webhook, and
+   calls Claude via the native `anthropic-claude:createAMessage` module
+   instead of raw HTTP.
+2. Ingestion and AI processing are split into two layers — five
+   Ingestion scenarios that just stage raw scraped items, and one shared
+   Processing scenario that runs Scout → Verifier → Writer on a bounded,
+   scheduled batch — so a large weekly batch can never time out an
+   execution.
 
-1. **Custom Webhook** — single ingestion point for all three Apify actors.
-2. **HTTP → Claude Scout agent** (`prompts/scout-agent.md`) — classify +
-   extract structured fields.
-3. **Parse JSON** the Scout response.
-4. **Router** — if `reject: true`, stop (optionally log to a "rejected"
-   Make Data Store for audit).
-5. **HTTP → Claude Verifier agent** (`prompts/verifier-agent.md`) —
-   anti-scam gate. For `pillar: "proof"`, first look up other records
-   already seen for the same `subject` (a Make Data Store keyed on
-   subject name, written to by every Scout call) and pass them in so the
-   2-Source Rule can actually be evaluated.
-6. **Parse JSON** the Verifier response.
-7. **Router** — if `approved: false`, stop (log `failedRules` +
-   `editorNote` for audit).
-8. **HTTP → Claude Writer agent** (`prompts/writer-agent.md`) — draft
-   blog/X/video copy.
-9. **Parse JSON** the Writer response.
-10. **HTTP → Retool webhook** — insert a `status: pending` row with the
-    Scout, Verifier, and Writer output bundled together (contract in
-    `retool/EDITOR_PORTAL_SPEC.md`).
-
-## Subject-history data store
-
-Add a Make Data Store (`silent_legacy_subject_history`) keyed on
-`subject`, written to after every successful Scout parse (step 3) with
-`{ subject, pillar, sourceLinks, seenAt }`. The Verifier step reads all
-rows for the current `subject` before its HTTP call so it has real
-corroborating records to check the 2-Source Rule against, instead of
-relying on a single Apify payload.
+For the current, accurate module-by-module design, see
+[`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md) (stage 2) and
+[`docs/DEPLOYMENT_STATUS.md`](../../docs/DEPLOYMENT_STATUS.md) (live
+scenario IDs, connections, and hook IDs). The subject-history Data Store
+idea in the original design (for the Verifier's 2-source cross-checking)
+was never built — still a valid future improvement, see
+`docs/DEPLOYMENT_STATUS.md`'s "Not yet done" section.
