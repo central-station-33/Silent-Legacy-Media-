@@ -1,11 +1,6 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
-// Server-only client. SUPABASE_ANON_KEY must never be prefixed with
-// NEXT_PUBLIC_ or otherwise sent to the browser -- every table it touches
-// relies on RLS policies scoped to the anon role (see the Supabase migration
-// in HANDOFF.md), and the app's own password gate (middleware.ts) is the only
-// thing standing between a visitor and these tables.
 // PostgREST's .or()/.filter() DSL treats `,`, `(`, `)`, and `.` as syntax,
 // not data -- interpolating a raw search term into an .or() string (as
 // both /drafts and its CSV export do, to search several columns with one
@@ -19,11 +14,19 @@ export function escapePostgrestValue(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
+// Server-only client, using the service_role key -- this bypasses RLS
+// entirely, which is why it must never reach the browser (the
+// "server-only" import above throws at build time if anything tries to
+// pull this into a client bundle). All access control lives at the app
+// layer (middleware.ts's password gate) and in the query code itself,
+// not in Postgres policies. RLS on these tables denies the anon role
+// outright (see the Supabase migration in HANDOFF.md), so the old anon
+// key can no longer read or write anything even if it leaked.
 export function supabase() {
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
-    throw new Error("SUPABASE_URL / SUPABASE_ANON_KEY are not set");
+    throw new Error("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set");
   }
   return createClient(url, key, {
     auth: { persistSession: false },
