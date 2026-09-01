@@ -73,6 +73,31 @@ brief:
   scheduled Make scenario yet — worth adding once the query patterns that
   work best are known from the two structured sources above.
 
+## Editorial focus: representation
+
+Silent Legacy actively prioritizes athletes, entertainers, and everyday
+people of color (globally — any country, any nationality) and women, on
+top of the existing pillar criteria. This is a sourcing/borderline-call
+priority implemented in the Scout prompt, not a rejection filter — see
+`docs/BRAND_BLUEPRINT.md` for the framing and `prompts/scout-agent.md`
+for the exact instruction. Every pillar and Verifier rule applies
+identically regardless of the subject's race, nationality, or gender;
+the emphasis only ever adds coverage, never excludes anyone who
+otherwise qualifies.
+
+Two levers to actually move the needle on this, both upstream of Scout:
+
+- **Search inputs.** Where an actor takes a name/query (SEC EDGAR's
+  `companyName`/`tickers`, the 990 actor's `searchQuery`/`eins`, the deed
+  actor's `partyLookups`), seed those with a globally diverse roster of
+  athlete, entertainer, and founder names/entities — not just US majors.
+  Scout can only surface what actually gets scraped.
+- **RSS feed list.** `scout-news`'s `feedUrls` currently defaults to
+  US wire services (PR Newswire, Business Wire). Adding regional/
+  international business press and outlets that specifically cover Black,
+  Latino, Asian, and other historically underrepresented business
+  communities widens what Scout has to work with.
+
 ## The "Where Are They Now?" framing
 
 Implemented directly in the Scout and Writer prompts (`prompts/`):

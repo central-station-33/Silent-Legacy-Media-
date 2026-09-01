@@ -38,6 +38,19 @@ These three map directly to WordPress categories (see
 [`wordpress/categories.json`](../wordpress/categories.json)) and to the
 `pillar` field the Scout agent assigns to every story.
 
+## Editorial focus: representation
+
+Silent Legacy actively prioritizes sourcing athletes, entertainers, and
+everyday people excelling in business who are people of color — globally,
+any country or nationality — and women, since these wealth-building
+stories are chronically underrepresented in mainstream coverage. This is
+implemented as a sourcing/borderline-call priority in the Scout agent
+(`prompts/scout-agent.md`), not a rejection filter: every pillar and
+verification rule above applies identically to subjects of any race,
+nationality, or gender. The emphasis only ever pushes toward covering
+more of these stories, never toward excluding anyone else who otherwise
+qualifies.
+
 ## Anti-scam "Proof of Work" verification logic
 
 `Legacy: Proof` stories must survive the **3-Strike Rejection Rules** before
