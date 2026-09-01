@@ -9,6 +9,75 @@ preserve. `docs/DEPLOYMENT_STATUS.md` is the more detailed, continuously-
 updated companion to this file (scenario-by-scenario); this file is the
 one-time orientation read.
 
+## 2026-09-01: Retool retired, `web/` replaces it, repos consolidated
+
+Two things changed today that everything below predates:
+
+1. **Two GitHub repos existed for this project** — `Silent-Legacy-Media`
+   (no dash, an empty stub) and this repo, `Silent-Legacy-Media-` (trailing
+   dash, this repo's actual content). The no-dash repo has since been
+   **deleted** (by whom/when isn't recorded here), which settles the
+   question on its own: **this repo, `Silent-Legacy-Media-`, is the sole
+   canonical repo going forward.** A `web/` app was built and briefly
+   pushed to the no-dash repo before its deletion; that work is carried
+   forward into this repo via this same change so nothing was lost.
+2. **Retool is retired.** There were actually *two* separate,
+   undocumented-until-now Retool efforts:
+   - The Chief Editor Portal described in `retool/EDITOR_PORTAL_SPEC.md`
+     (below) — driven by `silent_legacy_stories`, the AI pipeline's
+     editorial queue. This was genuinely never built.
+   - A second, simpler Retool app (`draftsEditorPage`, table `drafts`,
+     manual create/edit/approve/reject) that *was* built, separately,
+     and was never recorded in this repo. Its own README documented that
+     its Make.com sync was broken (401 Unauthorized) and unbuilt beyond
+     a spec.
+
+   Both are now replaced by a single custom app in `web/` — a Next.js
+   (App Router, TypeScript, Tailwind) app covering **both** the manual
+   drafts workflow and the AI-pipeline editorial queue in one place:
+   - `/drafts` — the manual CRUD workflow (create/edit/approve/reject,
+     KPIs, search + pillar/status filters, CSV export) — a straight port
+     of the old Retool app's functionality onto the `drafts` table.
+   - `/queue` — the Chief Editor Portal from `retool/EDITOR_PORTAL_SPEC.md`,
+     finally built: queue table + detail panel, editable AI-drafted
+     content, Approve (computes a staggered publish slot, notifies the
+     Make "Publish Trigger" webhook) / Reject (required reason) against
+     `silent_legacy_stories`.
+   - Access control: a single shared password gate (`APP_PASSWORD`,
+     `SESSION_SECRET` env vars, signed cookie, see `web/middleware.ts`) —
+     not real per-user auth. Fine for a small internal team; add
+     Supabase Auth first if that ever needs to change.
+   - Data: a **new**, dedicated Supabase Postgres project
+     (`silent-legacy-media`, project ref `rwnyyzayyrgvaaujryly`), not the
+     Retool-managed Postgres the Make scenarios currently write to. RLS
+     is enabled with `anon`-role policies (see the migration in
+     `web/README.md` if added, or Supabase project history) — the
+     `anon` key is kept as a server-only env var (never `NEXT_PUBLIC_`)
+     and the app never ships it to the browser, but this is a known
+     simplification, not a hardened setup. See `web/lib/supabase.ts`'s
+     comment for the tradeoff.
+
+   **This means the live Make scenarios (Layer 1 ingestion, Layer 2
+   processing — see "Make.com — what's live" below) still write to the
+   *old* Retool-managed Postgres, not this new Supabase database.**
+   `/queue` in the new app will show nothing until either (a) the Make
+   scenarios' Postgres connection is re-pointed at the new Supabase
+   project, or (b) `silent_legacy_stories` is migrated over. That
+   re-pointing is a live-infrastructure change to a working pipeline and
+   deliberately wasn't done as part of this replacement — do it
+   intentionally, not as a side effect of a doc read.
+
+   See `web/README.md` for exact Vercel/Supabase env var setup.
+
+   **Vercel note:** the `silent-legacy-media` Vercel project's Git
+   integration was, at time of writing, pointed at this repo's other
+   branch (`claude/silent-legacy-launch-gvn3z1`, docs-only) rather than
+   wherever this change lands — that's why production briefly served a
+   404 (no app on that branch, so no route matched `/`). Point the
+   Vercel project's Git integration at this repo's actual default
+   branch (whatever this PR merges into) before expecting `/drafts` or
+   `/queue` to load.
+
 ## What Silent Legacy is
 
 A verified-wealth media brand — "No Gossip. Just Legacy." Three pillars:
