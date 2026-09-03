@@ -455,3 +455,111 @@ id `6112987` ("ZZ Debug - probe postgres output shape") and table
 8. Distinct terminal status for rejected raw items (currently stuck at
    `'processing'`, see "Known gap" above).
 9. Delete the two debug artifacts (`6112987` scenario, `debug_probe` table).
+
+## 2026-09-03: SEC EDGAR insider data — verified live, sourcing caveat
+
+The SEC EDGAR ingest (`6108115`) now carries Form 4 insider-trading data
+through to `raw_items` under `raw_payload -> 'insider'`, and the Scout
+prompt has a matching extraction note telling it to treat a named owner
+as the story `subject` with the filing company as `entity`.
+
+**Verified on live data.** Actor run `do7A6b8L5Ua4F0O0C` returned 8 Form 4
+filings; all 8 landed in `raw_items` with `insider.ownerName` and
+`insider.primaryOwnerName` populated. This was the scenario's first-ever
+execution. It also settles two open syntax questions: nested dot access
+(`{{2.insiderTrading.summary.reportingOwner}}`) and nested array access
+(`{{2.insiderTrading.reportingOwners[1].name}}`) both resolve correctly
+in a raw Make blueprint.
+
+**NOTE — the people in that test batch are not pro athletes or
+entertainers.** All 8 rows are NIKE corporate executives (Mark Parker,
+Amy Montagne, Matthew Friend, Robert Leinwand, and others), and every
+one is a *sale*, not a purchase: `sharesBought: 0`, `valueBought: 0`,
+negative `netShares` — routine vesting and tax withholding. Scout should
+reject all 8, which is the correct editorial call. They are not Silent
+Legacy subjects and nothing in this batch is publishable.
+
+The test proved the plumbing, not the sourcing. Ticker-based Form 4
+search surfaces a company's *own* officers. To reach athletes and
+entertainers the actor must be pointed at the individuals themselves
+(search by their CIK) or at companies where they are known to hold a
+board seat or an equity stake. That is a sourcing decision, not an
+engineering one, and it is still open.
+
+Also unfixed and deliberately so: `insider.isDirector` / `insider.isOfficer`
+return `"false"` even for an Executive Chairman — those two booleans do
+not map correctly off `reportingOwners[1]`. They are redundant, since
+`insider.ownerTitle` carries the same information in better form, so the
+intended fix is to delete them rather than repair them.
+
+## 2026-09-03 (evening): sources triaged, Form D proven, CI fixed
+
+### Ingest status after full verification
+
+All six ingest mappings were checked field-by-field against each actor's
+real Apify output schema. No mapping bugs were found in any of them. The
+limiting factor is not the plumbing — it is whether a source contains a
+person's name at all.
+
+| Scenario | State | Note |
+|---|---|---|
+| News (RSS) `6108101` | **active, proven live** | the only source that has produced a published-ready story |
+| SEC Form D `6112801` | **active, proven live** | 25 filings ingested with named related persons |
+| SEC EDGAR `6108115` | **active, proven live** | Form 4 insider block now carried through |
+| Business Registry `6108117` | active, unexercised | CO/CT/OR only; agent is usually a law firm, not the owner |
+| Property Deed `6109447` | **deactivated** | actor returns coverage misses, every substantive field null |
+| IRS 990 `6109437` | **deactivated** | actor returns no officer names, ever — organisation-level only |
+
+Property Deed and IRS 990 were deactivated rather than deleted, so they
+are one call away from returning if the sourcing picture changes.
+
+### Make blueprint syntax — all now verified against live data
+
+- `{{N.field}}` and `{{N.array[1].field}}` (1-indexed) — verified
+- nested dot access, e.g. `{{2.insiderTrading.summary.reportingOwner}}` — verified
+- nested array access, e.g. `{{2.insiderTrading.reportingOwners[1].name}}` — verified
+- `{{join(2.relatedPersons[1].relationships; ", ")}}` — verified, returns
+  `"Executive Officer, Director"`
+- There is still no working whole-bundle reference; `{{N}}` resolves to the
+  literal number N, which is the bug that silently corrupted ingestion earlier.
+
+### Two structural fixes worth remembering
+
+**Never write the same row twice in one execution.** Make holds the whole
+scenario in one transaction and commits only at the end, so a second write
+to a row the scenario already touched blocks on its own uncommitted lock
+and dies at the 120s statement timeout. This caused two separate outages.
+Scenario `6112415` now does exactly one write to `raw_items`, at the end.
+
+**`public.safe_jsonb(text)`** replaces every `::jsonb` cast in the pipeline.
+It strips markdown code fences (the Writer wraps its JSON in ```json despite
+instructions not to, which was killing runs and discarding the work) and on
+any other parse failure returns `{"_parse_error": true, "_raw": ...}` rather
+than raising. A malformed model response can no longer abort a run.
+
+### CI
+
+`.github/workflows/node.js.yml` had never passed since the day it was added
+— it assumed the Node project was at the repo root, but the app is in `web/`.
+Fixed and merged (PR #5): job scoped to `web/`, cache pointed at
+`web/package-lock.json`, the missing `npm test` replaced with `npm run build`,
+and end-of-life Node 18 dropped from the matrix.
+
+### Still open
+
+1. **Vercel is deploying this repo four times** — `web` and
+   `silent-legacy-media` projects, each under two scopes. The root
+   `vercel.json` carries a legacy `builds` key that breaks the `web`
+   projects (Root Directory already `web`) while probably being required
+   by `silent-legacy-media` (Root Directory null). The fix is to
+   consolidate to one project with Root Directory `web` and then delete
+   `vercel.json` — a dashboard decision, not a code one.
+2. **Nothing enters the system without a manual actor run.** Confirm in the
+   Apify Console that no schedules exist; a News run fired at 17:03 that was
+   not triggered from here.
+3. `insider.isDirector` / `insider.isOfficer` do not map correctly and are
+   redundant against `insider.ownerTitle` — delete them.
+4. The `origin` git remote keeps reverting to
+   `central-station-33/Silent-Legacy-Media`. The real repository name ends
+   in a hyphen: `Silent-Legacy-Media-`. A bare 404 on push or on the GitHub
+   API is this, not an access problem.
