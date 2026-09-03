@@ -455,3 +455,39 @@ id `6112987` ("ZZ Debug - probe postgres output shape") and table
 8. Distinct terminal status for rejected raw items (currently stuck at
    `'processing'`, see "Known gap" above).
 9. Delete the two debug artifacts (`6112987` scenario, `debug_probe` table).
+
+## 2026-09-03: SEC EDGAR insider data — verified live, sourcing caveat
+
+The SEC EDGAR ingest (`6108115`) now carries Form 4 insider-trading data
+through to `raw_items` under `raw_payload -> 'insider'`, and the Scout
+prompt has a matching extraction note telling it to treat a named owner
+as the story `subject` with the filing company as `entity`.
+
+**Verified on live data.** Actor run `do7A6b8L5Ua4F0O0C` returned 8 Form 4
+filings; all 8 landed in `raw_items` with `insider.ownerName` and
+`insider.primaryOwnerName` populated. This was the scenario's first-ever
+execution. It also settles two open syntax questions: nested dot access
+(`{{2.insiderTrading.summary.reportingOwner}}`) and nested array access
+(`{{2.insiderTrading.reportingOwners[1].name}}`) both resolve correctly
+in a raw Make blueprint.
+
+**NOTE — the people in that test batch are not pro athletes or
+entertainers.** All 8 rows are NIKE corporate executives (Mark Parker,
+Amy Montagne, Matthew Friend, Robert Leinwand, and others), and every
+one is a *sale*, not a purchase: `sharesBought: 0`, `valueBought: 0`,
+negative `netShares` — routine vesting and tax withholding. Scout should
+reject all 8, which is the correct editorial call. They are not Silent
+Legacy subjects and nothing in this batch is publishable.
+
+The test proved the plumbing, not the sourcing. Ticker-based Form 4
+search surfaces a company's *own* officers. To reach athletes and
+entertainers the actor must be pointed at the individuals themselves
+(search by their CIK) or at companies where they are known to hold a
+board seat or an equity stake. That is a sourcing decision, not an
+engineering one, and it is still open.
+
+Also unfixed and deliberately so: `insider.isDirector` / `insider.isOfficer`
+return `"false"` even for an Executive Chairman — those two booleans do
+not map correctly off `reportingOwners[1]`. They are redundant, since
+`insider.ownerTitle` carries the same information in better form, so the
+intended fix is to delete them rather than repair them.
