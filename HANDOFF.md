@@ -563,3 +563,21 @@ and end-of-life Node 18 dropped from the matrix.
    `central-station-33/Silent-Legacy-Media`. The real repository name ends
    in a hyphen: `Silent-Legacy-Media-`. A bare 404 on push or on the GitHub
    API is this, not an access problem.
+
+## 2026-09-08: the app's live URL
+
+The dashboard (`/drafts`, `/queue`, `/login`) is live at:
+
+**https://web-puce-six-53.vercel.app**
+
+This is the Vercel `web` project (jtaffairs-8854 account) — the one with
+Root Directory correctly set to `web`. There is also a `silent-legacy-media`
+project deployed from the same repo; do not use it as the reference for
+this app. It predates the Root Directory fix, its Supabase Auth redirect
+URL is unrelated to this app (the app does not use Supabase Auth — it gates
+access with its own `APP_PASSWORD` + signed-cookie middleware, see
+`web/middleware.ts` and `web/lib/auth.ts`), and it should not be assumed to
+serve the same build.
+
+Login is a single shared password (`APP_PASSWORD` in that Vercel project's
+environment variables), not per-user accounts.
