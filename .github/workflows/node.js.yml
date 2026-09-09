@@ -1,4 +1,4 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
+# Builds the Next.js app in web/ across supported Node versions.
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
 
 name: Node.js CI
@@ -14,9 +14,14 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    # The Node project lives in web/, not at the repository root.
+    defaults:
+      run:
+        working-directory: web
+
     strategy:
       matrix:
-        node-version: [18.x, 20.x, 22.x]
+        node-version: [20.x, 22.x]
         # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
 
     steps:
@@ -26,6 +31,9 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
+        cache-dependency-path: web/package-lock.json
     - run: npm ci
-    - run: npm run build --if-present
-    - run: npm test
+    # `next build` type-checks and lints as part of the build, so it is the
+    # only check needed here. There is no test suite yet; add `npm test` back
+    # once web/package.json defines a test script.
+    - run: npm run build
